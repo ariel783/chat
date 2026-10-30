@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini WhatsApp</title>
+
+<!-- Cargar Firebase SDK Compat -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #d1d7db;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-container {
+  width: 95%;
+  max-width: 1000px;
+  height: 90vh;
+  background: white;
+  display: flex;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.sidebar {
+  width: 320px;
+  background: #ffffff;
+  border-right: 1px solid #e9edef;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  background: #f0f2f5;
+  padding: 15px;
+  border-bottom: 1px solid #e9edef;
+}
+
+.user-profile {
+  font-weight: bold;
+  color: #008069;
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.add-contact-box {
+  display: flex;
+  gap: 6px;
+}
+
+.add-contact-box input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  outline: none;
+}
+
+.add-contact-box button {
+  background: #008069;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.contact-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f2f5;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.contact-item:hover, .contact-item.active {
+  background: #f0f2f5;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #128c7e;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 18px;
+  margin-right: 12px;
+}
+
+.contact-info { flex: 1; }
+.contact-name { font-weight: bold; color: #111b21; }
+.contact-id { font-size: 12px; color: #667781; }
+
+.chat-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #efeae2;
+}
+
+.chat-header {
+  background: #f0f2f5;
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #e9edef;
+  justify-content: space-between;
+}
+
+.messages-area {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message-bubble {
+  max-width: 65%;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.message-bubble.sent {
+  align-self: flex-end;
+  background: #d9fdd3;
+  color: #111b21;
+}
+
+.message-bubble.received {
+  align-self: flex-start;
+  background: #ffffff;
+  color: #111b21;
+}
+
+.chat-input-area {
+  background: #f0f2f5;
+  padding: 12px 15px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-input-area input {
+  flex: 1;
+  padding: 11px 15px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+  font-size: 15px;
+}
+
+.chat-input-area button {
+  background: #008069;
+  color: white;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.login-modal {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-box {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  width: 320px;
+}
+
+.login-box h2 { color: #008069; margin-bottom: 15px; }
+.login-box input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; }
+.login-box button { width: 100%; padding: 10px; background: #008069; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+</style>
+</head>
+
+<body>
+
+<div id="loginModal" class="login-modal">
+  <div class="login-box">
+    <h2>💬 Mini WhatsApp</h2>
+    <p>Escribe tu nombre:</p>
+    <input id="myUsernameInput" placeholder="Tu nombre..." maxlength="20">
+    <button id="startAppBtn">Entrar a chatear</button>
+  </div>
+</div>
+
+<div class="app-container">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div id="myProfileText" class="user-profile">Mi Perfil: -</div>
+      <div class="add-contact-box">
+        <input id="addContactInput" placeholder="Nombre de tu amiga...">
+        <button id="addContactBtn">＋ Agregar</button>
+      </div>
+    </div>
+    <div id="contactList" class="contact-list"></div>
+  </div>
+
+  <div class="chat-window">
+    <div class="chat-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div id="activeContactAvatar" class="avatar" style="display:none">?</div>
+        <h3 id="activeContactName">Selecciona un chat</h3>
+      </div>
+      <small id="connectionStatus" style="color: #008069; font-weight: bold;"></small>
+    </div>
+
+    <div id="messagesArea" class="messages-area"></div>
+
+    <div class="chat-input-area">
+      <input id="messageInput" placeholder="Escribe un mensaje..." disabled>
+      <button id="sendMessageBtn" disabled>Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyD7Motd_mNxIq_MUb5WwYkE9zAL_h82Xr0",
+  authDomain: "mini-chat-5b28f.firebaseapp.com",
+  projectId: "mini-chat-5b28f",
+  storageBucket: "mini-chat-5b28f.firebasestorage.app",
+  messagingSenderId: "663713695539",
+  appId: "1:663713695539:web:f1328949af926808ba2046",
+  measurementId: "G-0LDVR12CMM"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let myName = "";
+let activeContact = "";
+let unsubscribeMessages = null;
+
+const $ = id => document.getElementById(id);
+
+function cleanName(str) {
+  return str.trim().toLowerCase();
+}
+
+$("startAppBtn").addEventListener("click", () => {
+  const name = $("myUsernameInput").value.trim();
+  if (!name) return alert("Escribe tu nombre.");
+
+  myName = name;
+  $("myProfileText").textContent = "👤 " + myName;
+  $("loginModal").style.display = "none";
+
+  loadContacts();
+});
+
+$("addContactBtn").addEventListener("click", () => {
+  const friend = $("addContactInput").value.trim();
+  if (!friend) return;
+  if (cleanName(friend) === cleanName(myName)) return alert("No te puedes agregar a ti misma.");
+
+  let contacts = JSON.parse(localStorage.getItem("wa_contacts_" + cleanName(myName)) || "[]");
+  
+  if (!contacts.some(c => cleanName(c) === cleanName(friend))) {
+    contacts.push(friend);
+    localStorage.setItem("wa_contacts_" + cleanName(myName), JSON.stringify(contacts));
+  }
+
+  $("addContactInput").value = "";
+  loadContacts();
+  selectContact(friend);
+});
+
+function loadContacts() {
+  const listContainer = $("contactList");
+  listContainer.innerHTML = "";
+
+  let contacts = JSON.parse(localStorage.getItem("wa_contacts_" + cleanName(myName)) || "[]");
+
+  contacts.forEach(friend => {
+    const div = document.createElement("div");
+    div.className = "client-item" + (cleanName(friend) === cleanName(activeContact) ? " active" : "");
+    // Cambiamos a formato de clase estándar
+    div.className = "contact-item" + (cleanName(friend) === cleanName(activeContact) ? " active" : "");
+    div.onclick = () => selectContact(friend);
+
+    div.innerHTML = `
+      <div class="avatar">${friend[0].toUpperCase()}</div>
+      <div class="contact-info">
+        <div class="contact-name">${friend}</div>
+        <div class="contact-id">Haz clic para abrir</div>
+      </div>
+    `;
+    listContainer.appendChild(div);
+  });
+}
+
+function selectContact(friend) {
+  activeContact = friend;
+  $("activeContactName").textContent = friend;
+  $("activeContactAvatar").style.display = "flex";
+  $("activeContactAvatar").textContent = friend[0].toUpperCase();
+
+  $("messageInput").disabled = false;
+  $("sendMessageBtn").disabled = false;
+  $("connectionStatus").textContent = "🟢 Conectado";
+
+  loadContacts();
+  listenToMessages();
+}
+
+// Generar ID de chat fijo basado en ordenar alfabéticamente los dos nombres
+function getChatId() {
+  const n1 = cleanName(myName);
+  const n2 = cleanName(activeContact);
+  return [n1, n2].sort().join("_vs_");
+}
+
+function listenToMessages() {
+  if (unsubscribeMessages) unsubscribeMessages();
+
+  const chatId = getChatId();
+
+  // Quitamos temporalmente el orderBy para evitar que Firebase pida un índice personalizado y cargue al instante
+  unsubscribeMessages = db.collection("chats")
+    .doc(chatId)
+    .collection("messages")
+    .onSnapshot(snapshot => {
+      const area = $("messagesArea");
+      area.innerHTML = "";
+
+      // Convertimos los documentos a un arreglo y los ordenamos por marca de tiempo manualmente
+      let docs = [];
+      snapshot.forEach(doc => {
+        docs.push(doc.data());
+      });
+
+      // Ordenar por tiempo (del más viejo al más nuevo)
+      docs.sort((a, b) => {
+        const t1 = a.timestamp ? a.timestamp.toMillis() : 0;
+        const t2 = b.timestamp ? b.timestamp.toMillis() : 0;
+        return t1 - t2;
+      });
+
+      docs.forEach(data => {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = "message-bubble " + (cleanName(data.sender) === cleanName(myName) ? "sent" : "received");
+        msgDiv.textContent = data.text;
+        area.appendChild(msgDiv);
+      });
+
+      area.scrollTop = area.scrollHeight;
+    }, error => {
+      console.error("Error en Firebase:", error);
+      $("connectionStatus").textContent = "🔴 Error de conexión";
+    });
+}
+
+function sendMessage() {
+  const text = $("messageInput").value.trim();
+  if (!text || !activeContact) return;
+
+  const chatId = getChatId();
+
+  db.collection("chats").doc(chatId).collection("messages").add({
+    sender: myName,
+    text: text,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  $("messageInput").value = "";
+}
+
+$("sendMessageBtn").addEventListener("click", sendMessage);
+$("messageInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") sendMessage();
+});
+</script>
+</body>
+</html>
